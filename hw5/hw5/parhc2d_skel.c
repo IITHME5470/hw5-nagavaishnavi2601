@@ -17,24 +17,36 @@ void grid(int nx, int nxglob, int istglob, int ienglob, double xstglob, double x
   }
 }
 
-void enforce_bcs(int nx, int ny, double *x, double *y, double **T)
+void enforce_bcs(int nx, int ny, double *x, double *y, double **T,int istglob,int ienglob,int jstglob,int jenglob,int nxglob,int nyglob)
 {
   int i, j;
 
   // left and right ends
+  if(istglob==0)
   for(j=0; j<ny; j++)
   {
-    T[0][j] = 0.0;    T[nx-1][j] = 0.0;
+    T[0][j] = 0.0;
+  }
+  if(ienglob==nxglob-1)
+  for(j=0; j<ny; j++)
+  {
+    T[nx-1][j] = 0.0;
   }
 
   // top and bottom ends
+  if(jstglob==0)
   for(i=0; i<nx; i++)
   {
-    T[i][0] = 0.0;    T[i][ny-1] = 0.0;
+    T[i][0] = 0.0;
+  }
+  if(jenglob==nyglob-1)
+  for(i=0; i<nx; i++)
+  {
+    T[i][ny-1] = 0.0;
   }
 }
 
-void set_initial_condition(int nx, int ny, double *x, double *y, double **T, double dx, double dy)
+void set_initial_condition(int nx, int ny, double *x, double *y, double **T, double dx, double dy,int istglob,int ienglob,int jstglob,int jenglob,int nxglob,int nyglob)
 {
   int i, j;
   double del=1.0;
@@ -46,7 +58,7 @@ void set_initial_condition(int nx, int ny, double *x, double *y, double **T, dou
                        * (tanh((y[j]-0.4)/(del*dy)) - tanh((y[j]-0.6)/(del*dy)));
     }
 
-  enforce_bcs(nx,ny,x,y,T); //ensure BCs are satisfied at t = 0
+  enforce_bcs(nx,ny,x,y,T,istglob,ienglob,jstglob,jenglob,nxglob,nyglob); //ensure BCs are satisfied at t = 0
 }
 
 void get_rhs(int nx, int nxglob, int ny, int nyglob, int istglob, int ienglob, int jstglob, int jenglob, double dx, double dy, double *xleftghost, double *xrightghost, double *ybotghost, double *ytopghost, double kdiff, double *x, double *y, double **T, double **rhs)
@@ -73,22 +85,35 @@ void get_rhs(int nx, int nxglob, int ny, int nyglob, int istglob, int ienglob, i
   // right boundary
   i = nx-1;
   if(ienglob==nxglob-1)  //processors adjacent to the right end of the domain
-    ...;
-  else
-    ...;
-    // T[i+1][j] replaced with xrightghost
+  for(j=1; j<ny-1; j++)
+    rhs[i][j] = 0.0;
+else
+  for(j=1; j<ny-1; j++)
+    rhs[i][j] = kdiff*(T[i-1][j]+xrightghost[j]-2.0*T[i][j])/dxsq +     // T[i-1][j] replaced with xleftghost
+                kdiff*(T[i][j+1]+T[i][j-1]-2.0*T[i][j])/dysq;
+
  
   // bottom boundary
   j = 0;
   if(jstglob==0)  //processors adjacent to the bottom end of the domain
-    ...;
+    for(i=1;i<nx-1;i++)
+    rhs[i][j]=0.0;
   else
-    ...;
+    for(i=1;i<nx-1;i++)
+    rhs[i][j] = kdiff*(T[i-1][j]+T[i+1][j]-2.0*T[i][j])/dxsq +     // T[i-1][j] replaced with xleftghost
+                kdiff*(T[i][j+1]+ybotghost[i]-2.0*T[i][j])/dysq;
      // T[i][j-1] replaced with ybotghost
  
   // top boundary
   j = ny-1;
-    ....;
+  if(jenglob==nyglob-1)  //processors adjacent to the bottom end of the domain
+    for(i=1;i<nx-1;i++)
+    rhs[i][j]=0.0;
+  else
+    for(i=1;i<nx-1;i++)
+    rhs[i][j] = kdiff*(T[i-1][j]+T[i+1][j]-2.0*T[i][j])/dxsq +     // T[i-1][j] replaced with xleftghost
+                kdiff*(T[i][j-1]+ytopghost[i]-2.0*T[i][j])/dysq;
+
 
   // bot-left corner
   i = 0; j = 0;
@@ -100,16 +125,29 @@ void get_rhs(int nx, int nxglob, int ny, int nyglob, int istglob, int ienglob, i
  
   // bot-right corner
   i = nx-1; j = 0;
-    ....;
+  if(ienglob==nyglob-1|| jstglob==0)  //processors adjacent to the left or bottom ends of the domain
+      rhs[i][j] = 0.0;
+  else
+      rhs[i][j] = kdiff*(T[i-1][j]+xrightghost[j]-2.0*T[i][j])/dxsq +   // T[i-1][j] replaced with xleftghost
+                  kdiff*(T[i][j+1]+ybotghost[i]-2.0*T[i][j])/dysq;     // T[i][j-1] replaced with ybotghost
+ 
  
  
   // top-left corner
   i = 0; j = ny-1;
-    ....;
+  if(istglob==0|| jenglob==nyglob-1)  //processors adjacent to the left or bottom ends of the domain
+      rhs[i][j] = 0.0;
+  else
+      rhs[i][j] = kdiff*(T[i+1][j]+xleftghost[j]-2.0*T[i][j])/dxsq +   // T[i-1][j] replaced with xleftghost
+                  kdiff*(T[i][j-1]+ytopghost[i]-2.0*T[i][j])/dysq;  
  
   // top-right corner
   i = nx-1; j = ny-1;
-    ....;
+  if(ienglob==nxglob-1|| jenglob==nyglob-1)  //processors adjacent to the left or bottom ends of the domain
+  rhs[i][j] = 0.0;
+else
+  rhs[i][j] = kdiff*(T[i-1][j]+xrightghost[j]-2.0*T[i][j])/dxsq +   // T[i-1][j] replaced with xleftghost
+              kdiff*(T[i][j-1]+ytopghost[i]-2.0*T[i][j])/dysq;
  
 }
 
@@ -121,32 +159,32 @@ void halo_exchange_2d_x(int rank, int rank_x, int rank_y, int size, int px, int 
   int left_nb, right_nb, i, j;
  
   // set left neighbours 
-    left_nb = ...;
+    left_nb = (rank_x==0) ? MPI_PROC_NULL:rank-1;
 
   // set right neighbours 
-    right_nb = ...;
+    right_nb = (rank_x==px-1)? MPI_PROC_NULL:rank+1;
 
   // ---send to left; recv from right---
   // pack send buffer
-  for(...)
-    sendbuf_x[j] = ...;
+  for(j=0;j<ny;j++)
+    sendbuf_x[j] = T[0][j];
   // send and recv
-  MPI_Recv(recvbuf_x, ......);
-  MPI_Send(sendbuf_x, ......);
+  MPI_Recv(recvbuf_x, ny,MPI_DOUBLE,right_nb,0,MPI_COMM_WORLD,&status);
+  MPI_Send(sendbuf_x,  ny,MPI_DOUBLE,left_nb,0,MPI_COMM_WORLD);
   // unpack recv buffer
-  for(...)
-    xrightghost[j] = ...;
+  for(j=0;j<ny;j++)
+    xrightghost[j] = recvbuf_x[j];
 
   // ---send to right; recv from left---
   // pack send buffer
-  for(....)
-    sendbuf_x[j] = ...;
+  for(j=0;j<ny;j++)
+    sendbuf_x[j] = T[nx-1][j];
   // send and recv
-  MPI_Recv(recvbuf_x, ......);
-  MPI_Send(sendbuf_x, ......);
+  MPI_Recv(recvbuf_x, ny,MPI_DOUBLE,left_nb,0,MPI_COMM_WORLD,&status);
+  MPI_Send(sendbuf_x,  ny,MPI_DOUBLE,right_nb,0,MPI_COMM_WORLD);
   // unpack recv buffer
-  for(...)
-    xleftghost[j] = ...;
+  for(j=0;j<ny;j++)
+    xleftghost[j] = recvbuf_x[j];
 }
 
 void halo_exchange_2d_y(int rank, int rank_x, int rank_y, int size, int px, int py, int nx, int ny, int nxglob, int nyglob, double *x, double *y, double **T, double *ybotghost, double *ytopghost, double *sendbuf_y, double *recvbuf_y)
@@ -157,32 +195,32 @@ void halo_exchange_2d_y(int rank, int rank_x, int rank_y, int size, int px, int 
   int bot_nb, top_nb, i, j;
  
   // set bot neighbours 
-    bot_nb = ...;
+    bot_nb = (rank_y==0)?MPI_PROC_NULL:rank-px;
 
   // set top neighbours 
-    top_nb = ...;
+    top_nb = (rank_y==py-1)?MPI_PROC_NULL:rank+px;
 
   // ---send to bot; recv from top---
   // pack send buffer
-  for(....)
-    sendbuf_y[i] = ....;
+  for(i=0;i<nx;i++)
+    sendbuf_y[i] = T[i][0];
   // send and recv
-  MPI_Recv(recvbuf_y, ....);
-  MPI_Send(sendbuf_y, ....);
+  MPI_Recv(recvbuf_y, nx,MPI_DOUBLE,top_nb,0,MPI_COMM_WORLD,&status);
+  MPI_Send(sendbuf_y,  nx,MPI_DOUBLE,bot_nb,0,MPI_COMM_WORLD);
   // unpack recv buffer
-  for(....)
-    ytopghost[i] = ...;
+  for(i=0;i<nx;i++)
+    ytopghost[i] = recvbuf_y[i];
 
   // ---send to top; recv from bot---
   // pack send buffer
-  for(....)
-    sendbuf_y[i] = ....;
+  for(i=0;i<nx;i++)
+    sendbuf_y[i] = T[i][ny-1];
   // send and recv
-  MPI_Recv(recvbuf_y, ....);
-  MPI_Send(sendbuf_y, ....);
+  MPI_Recv(recvbuf_y, nx,MPI_DOUBLE,bot_nb,0,MPI_COMM_WORLD,&status);
+  MPI_Send(sendbuf_y,  nx,MPI_DOUBLE,top_nb,0,MPI_COMM_WORLD);
   // unpack recv buffer
-  for(....)
-    ytopghost[i] = ...;
+  for(i=0;i<nx;i++)
+    ybotghost[i] = recvbuf_y[i];
 }
 
 void timestep_FwdEuler(int rank, int size, int rank_x, int rank_y, int px, int py, int nx, int nxglob, int ny, int nyglob, int istglob, int ienglob, int jstglob, int jenglob, double dt, double dx, double dy, double *xleftghost, double *xrightghost, double *ybotghost, double *ytopghost, double kdiff, double *x, double *y, double **T, double **rhs, double *sendbuf_x, double *recvbuf_x, double *sendbuf_y, double *recvbuf_y)
@@ -202,7 +240,7 @@ void timestep_FwdEuler(int rank, int size, int rank_x, int rank_y, int px, int p
      T[i][j] = T[i][j] + dt*rhs[i][j];                           // update T^(it+1)[i]
 
   // set Dirichlet BCs
-  enforce_bcs(nx,ny,x,y,T);
+  enforce_bcs(nx,ny,x,y,T,istglob,ienglob,jstglob,jenglob,nxglob,nyglob);
 
 }
 
@@ -218,6 +256,7 @@ double get_error_norm_2d(int nx, int ny, double **arr1, double **arr2)
      norm_diff += local_diff * local_diff;
    }
    norm_diff = sqrt(norm_diff/(double) (nx*ny));
+   return norm_diff;
 }
 
 //void linsolve_hc2d_gs_adi(int nx, int ny, double rx, double ry, double **rhs, double **T, double **Tnew)
@@ -298,7 +337,7 @@ void linsolve_hc2d_jacobi(int nx, int ny, double rx, double ry, double **rhs, do
 
 }
 
-void timestep_BwdEuler(int nx, int ny, double dt, double dx, double dy, double kdiff, double *x, double *y, double **T, double **rhs, double **Tnew)
+void timestep_BwdEuler(int nx, int ny, double dt, double dx, double dy, double kdiff, double *x, double *y, double **T, double **rhs, double **Tnew, int istglob, int ienglob, int jstglob, int jenglob, int nxglob, int nyglob)
 {
 
   int i,j;
@@ -334,7 +373,7 @@ void timestep_BwdEuler(int nx, int ny, double dt, double dx, double dy, double k
   //linsolve_hc2d_gs_rb(nx, ny, rx, ry, rhs, T, Tnew);
 
   // set Dirichlet BCs
-  enforce_bcs(nx,ny,x,y,T);
+  enforce_bcs(nx,ny,x,y,T,istglob, ienglob, jstglob, jenglob, nxglob, nyglob);
 
 }
 
@@ -398,7 +437,7 @@ int main(int argc, char** argv)
     // prepare for time loop
     num_time_steps = (int)((ten-tst)/dt) + 1; // why add 1 to this?
     it_print = (int) (t_print/dt);            // write out every t_print time units
-    num_time_steps = 1;
+    // num_time_steps = 1;
 
     printf("Inputs are: %d %d %lf %lf\n", nxglob, nyglob, xstglob, xenglob);
     printf("Inputs are: %lf %lf %lf %lf %lf\n", ystglob, yenglob, tst, ten, kdiff);
@@ -507,7 +546,7 @@ int main(int argc, char** argv)
   fprintf(fid, "--Done writing y grid points--\n");
   fclose(fid);  
 
-  set_initial_condition(nx, ny, x, y, T, dx, dy);  // initial condition
+  set_initial_condition(nx, ny, x, y, T, dx, dy,istglob, ienglob, jstglob, jenglob, nxglob, nyglob);  // initial condition
   output_soln(rank,nx,ny,0,tst,x,y,T);     // output initial
 
   // start time stepping loop
